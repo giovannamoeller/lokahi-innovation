@@ -36,3 +36,30 @@ class DoctorRecommendationService:
     results_values = self.parser.parse(results.content)
     
     return results_values
+  
+  async def rank_providers(self, search_params, provider_data):
+    provider_descriptions = []
+    for _, provider in provider_data.iterrows():
+      desc = f"""
+      Provider: {provider['PROV_KEY']}
+      Specialty: {provider['PROV_TAXONOMY']}
+      Success Rate: {provider['SV_STAT']*100:.1f}%
+      Avg Cost: ${provider['AMT_PAID']['mean']:.2f}
+      Location: {provider['PROV_CLINIC_ZIP']}
+      """
+      provider_descriptions.append(desc)
+
+    prompt = f"""
+    Given these provider details and user preferences:
+    Search Parameters: {search_params}
+        
+    Providers:
+    {provider_descriptions[:5]}  # Limiting to 5 for example
+        
+    Rank these providers and explain why they match. Return JSON with rankings and explanations.
+    """
+    
+    response = self.client.invoke(prompt)
+    return response.content
+      
+    
