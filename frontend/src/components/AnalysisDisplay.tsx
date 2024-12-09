@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Activity, Heart, Users, AlertTriangle } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { healthApi } from '../services/api';
+import AIAnalysis from './AIAnalysis';
 
 export default function AnalysisDisplay({ 
   msa, 
@@ -139,23 +140,7 @@ export default function AnalysisDisplay({
 
       {/* AI Analysis */}
       {analysis.llm_analysis && (
-        <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
-          <h3 className="text-xl font-semibold mb-6">AI Analysis</h3>
-          <div className="prose max-w-none">
-            {analysis.llm_analysis.analysis.split('\n\n').map((paragraph: string, index: number) => (
-              <div key={index} className="mb-4">
-                {paragraph.split('\n').map((line: string, lineIndex: number) => (
-                  <p 
-                    key={lineIndex} 
-                    className={`${line.startsWith('-') ? 'ml-4 text-gray-600' : 'font-medium text-gray-900'}`}
-                  >
-                    {line}
-                  </p>
-                ))}
-              </div>
-            ))}
-          </div>
-        </div>
+        <AIAnalysis analysis={analysis.llm_analysis.analysis} />
       )}
     </div>
   );
