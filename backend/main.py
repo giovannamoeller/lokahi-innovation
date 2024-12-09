@@ -81,6 +81,8 @@ async def analyze_msa(request: AnalysisRequest):
             if llm_result:
                 response["llm_analysis"] = llm_result
         
+        print(response["llm_analysis"])
+        
         return response
     
     except Exception as e:

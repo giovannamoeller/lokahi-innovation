@@ -4,6 +4,8 @@ from typing import Dict, List, Tuple, Optional
 from datetime import datetime
 from dataclasses import dataclass
 from services.ai_service import HealthLLMAnalyzer
+from concurrent.futures import ThreadPoolExecutor
+from functools import partial
 from config import settings
 import s3fs
 
@@ -17,44 +19,67 @@ class HealthDataProcessor:
         self.s3 = s3fs.S3FileSystem(
             key=settings.AWS_ACCESS_KEY_ID,
             secret=settings.AWS_SECRET_ACCESS_KEY,
-            client_kwargs={'region_name': settings.AWS_REGION}
+            client_kwargs={
+                'region_name': settings.AWS_REGION,
+            }
         )
         
+    def _load_parquet_file(self, file_path: str) -> pd.DataFrame:
+        """Load a single parquet file with optimized settings."""
+        return pd.read_parquet(
+            f"s3://{file_path}",
+            filesystem=self.s3,
+            columns=self._get_required_columns(file_path),  # Only load needed columns
+            engine='pyarrow'  # Using pyarrow instead of fastparquet for S3 compatibility
+        )
+    
+    def _get_required_columns(self, file_path: str) -> List[str]:
+        """Return required columns based on file type to avoid loading unnecessary data."""
+        if 'Claims_Services' in file_path:
+            return ['PRIMARY_PERSON_KEY', 'CLAIM_ID_KEY', 'FROM_DATE', 'TO_DATE', 
+                   'PAID_DATE', 'ADM_DATE', 'DIS_DATE', 'DIAG_CCS_1_LABEL', 
+                   'SERVICE_SETTING', 'AMT_COPAY', 'AMT_DEDUCT', 'AMT_COINS', 'AMT_PAID']
+        elif 'Claims_Member' in file_path:
+            return ['PRIMARY_PERSON_KEY', 'MEM_MSA_NAME', 'MEM_STATE', 
+                   'MEM_RACE', 'MEM_ETHNICITY', 'MEM_GENDER']
+        # Add other file types as needed
+        return None  # Load all columns if type unknown
+
+    def _parallel_load_files(self, file_paths: List[str], max_workers: int = 4) -> pd.DataFrame:
+        """Load multiple parquet files in parallel."""
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            dfs = list(executor.map(self._load_parquet_file, file_paths))
+        return pd.concat(dfs, ignore_index=True)
+
     def load_data(self) -> None:
-        """Load all necessary data files from S3."""
+        """Load all necessary data files from S3 with parallel processing."""
         print("Loading data from S3...")
         try:
-            base_path = f's3://{settings.S3_BUCKET}'
+            base_path = settings.S3_BUCKET
             
-            # Load Enrollment data
-            print("Loading Enrollment data...")
-            enrollment_files = self.s3.glob(f"{settings.S3_BUCKET}/Claims_Enrollment/*.parquet")
-            self.enrollment_df = pd.concat([
-                pd.read_parquet(f"s3://{f}", filesystem=self.s3) 
-                for f in enrollment_files
-            ])
+            # Get all file paths first
+            data_files = {
+                'enrollment': self.s3.glob(f"{base_path}/Claims_Enrollment/*.parquet"),
+                'services': self.s3.glob(f"{base_path}/Claims_Services/*.parquet"),
+                'members': self.s3.glob(f"{base_path}/Claims_Member/*.parquet"),
+                'providers': self.s3.glob(f"{base_path}/Claims_Provider/*.parquet")
+            }
             
-            # List files in each directory to get exact paths
-            print("Loading Services data...")
-            services_files = self.s3.glob(f"{settings.S3_BUCKET}/Claims_Services/*.parquet")
-            self.services_df = pd.concat([
-                pd.read_parquet(f"s3://{f}", filesystem=self.s3) 
-                for f in services_files
-            ])
-            
-            print("Loading Members data...")
-            members_files = self.s3.glob(f"{settings.S3_BUCKET}/Claims_Member/*.parquet")
-            self.members_df = pd.concat([
-                pd.read_parquet(f"s3://{f}", filesystem=self.s3) 
-                for f in members_files
-            ])
-            
-            print("Loading Providers data...")
-            providers_files = self.s3.glob(f"{settings.S3_BUCKET}/Claims_Provider/*.parquet")
-            self.providers_df = pd.concat([
-                pd.read_parquet(f"s3://{f}", filesystem=self.s3) 
-                for f in providers_files
-            ])
+            # Load each dataset in parallel
+            print("Loading all datasets in parallel...")
+            with ThreadPoolExecutor(max_workers=4) as executor:
+                futures = {
+                    'enrollment': executor.submit(self._parallel_load_files, data_files['enrollment']),
+                    'services': executor.submit(self._parallel_load_files, data_files['services']),
+                    'members': executor.submit(self._parallel_load_files, data_files['members']),
+                    'providers': executor.submit(self._parallel_load_files, data_files['providers'])
+                }
+                
+                # Assign results as they complete
+                self.enrollment_df = futures['enrollment'].result()
+                self.services_df = futures['services'].result()
+                self.members_df = futures['members'].result()
+                self.providers_df = futures['providers'].result()
             
             # Clean the data after loading
             self.clean_data()

@@ -57,47 +57,58 @@ class HealthLLMAnalyzer:
     def analyze_community_health(self, msa_name: str, risk_profile: Dict) -> Dict:
         """Generate comprehensive health analysis using LLM."""
         try:
-            # Format data for LLM
             formatted_data = self.format_health_data(risk_profile)
             
-            # Prepare messages
+            # More structured prompt
             messages = [
-                SystemMessage(content="You are a public health expert specialized in analyzing healthcare data and providing actionable insights."),
+                SystemMessage(content="""You are a public health expert specialized in analyzing healthcare data. 
+                You MUST ALWAYS provide analysis in the exact format requested, with all sections present and properly numbered.
+                Each section must contain at least 3 bullet points.
+                If data is missing for any section, provide general recommendations based on available information."""),
+                
                 HumanMessage(content=f"""
-                Analyze the following health data for {msa_name} and provide key insights and recommendations:
-
+                Analyze the following health data for {msa_name}. 
+                
                 Health Data:
                 {formatted_data}
 
-                Please provide analysis in the following format:
+                You MUST provide your analysis using EXACTLY these sections and format:
+
                 1. Key Health Challenges:
-                   - Identify the most pressing health issues
-                   - Analyze prevalence patterns
-                   - Highlight concerning trends
+                - Most prevalent conditions with exact percentages from the data
+                - Population impact numbers
+                - Concerning patterns and trends
                 
                 2. Healthcare Access Analysis:
-                   - Evaluate cost barriers
-                   - Identify access disparities
-                   - Assess healthcare utilization patterns
+                - Cost analysis using provided figures
+                - Access disparities across demographics
+                - Utilization patterns
                 
                 3. Recommendations:
-                   - Suggest specific public health interventions
-                   - Propose community-specific solutions
-                   - Outline preventive care strategies
-
+                - Specific interventions for top health challenges
+                - Solutions for identified disparities
+                - Preventive care strategies
+                
                 4. Priority Areas:
-                   - List top 3 immediate action items
-                   - Suggest resource allocation priorities
-                   - Identify areas needing further investigation
+                - Three specific, actionable items
+                - Resource allocation suggestions
+                - Areas needing immediate investigation
+
+                Remember: All sections MUST be present and numbered exactly as shown above.
+                Use bullet points (-) for each item within sections.
+                Reference specific numbers and percentages from the data whenever possible.
                 """)
             ]
-            
-            # Generate analysis using ChatGroq
+
+            # Generate analysis
             response = self.chat_model.invoke(messages)
+            
+            # Validate and fix response if needed
+            validated_response = self.validate_and_fix_response(response.content)
             
             return {
                 "msa_name": msa_name,
-                "analysis": response.content,
+                "analysis": validated_response,
                 "source_data": risk_profile,
                 "timestamp": datetime.now().isoformat()
             }
@@ -105,6 +116,66 @@ class HealthLLMAnalyzer:
         except Exception as e:
             print(f"Error generating LLM analysis: {str(e)}")
             return None
+
+    def validate_and_fix_response(self, content: str) -> str:
+        """Validate and fix LLM response to ensure all sections are present."""
+        required_sections = [
+            "1. Key Health Challenges:",
+            "2. Healthcare Access Analysis:",
+            "3. Recommendations:",
+            "4. Priority Areas:"
+        ]
+        
+        # Check if all sections are present
+        fixed_content = content
+        sections_present = all(section in content for section in required_sections)
+        
+        if not sections_present:
+            # Try to fix missing sections
+            sections = content.split('\n\n')
+            fixed_sections = []
+            
+            for required in required_sections:
+                section_found = False
+                for section in sections:
+                    if required.strip('1234. :') in section:
+                        fixed_sections.append(section)
+                        section_found = True
+                        break
+                
+                if not section_found:
+                    # Add default content for missing section
+                    fixed_sections.append(self.get_default_section(required))
+            
+            fixed_content = '\n\n'.join(fixed_sections)
+        
+        return fixed_content
+
+    def get_default_section(self, section_title: str) -> str:
+        """Provide default content for missing sections."""
+        defaults = {
+            "1. Key Health Challenges:": """1. Key Health Challenges:
+            - Review of most common conditions in the region
+            - Analysis of affected population numbers
+            - Identification of concerning health trends""",
+
+                    "2. Healthcare Access Analysis:": """2. Healthcare Access Analysis:
+            - Evaluation of current healthcare costs
+            - Assessment of service utilization
+            - Analysis of demographic access patterns""",
+
+                    "3. Recommendations:": """3. Recommendations:
+            - Implement targeted health screening programs
+            - Develop community health education initiatives
+            - Enhance healthcare access programs""",
+
+                    "4. Priority Areas:": """4. Priority Areas:
+            - Establish comprehensive health monitoring system
+            - Develop targeted intervention programs
+            - Implement regular health outcome assessments"""
+        }
+    
+        return defaults.get(section_title, "")
     
     def compare_regions(self, msa_name: str, profiles: Dict[str, Dict]) -> Dict:
         """Generate comparative analysis between regions."""
