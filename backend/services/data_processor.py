@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from services.ai_service import HealthLLMAnalyzer
 from config import settings
 import s3fs
+import time
 
 class HealthDataProcessor:
     def __init__(self):
@@ -20,50 +21,67 @@ class HealthDataProcessor:
             client_kwargs={'region_name': settings.AWS_REGION}
         )
         
+    def _load_parquet_with_retry(self, path: str, max_retries: int = 3) -> pd.DataFrame:
+        """Load parquet file with retry logic"""
+        for attempt in range(max_retries):
+            try:
+                print(f"Attempt {attempt + 1} to load {path}")
+                files = self.s3.glob(f"{settings.S3_BUCKET}/{path}/*.parquet")
+                if not files:
+                    raise FileNotFoundError(f"No parquet files found in {path}")
+                
+                dfs = []
+                for f in files:
+                    try:
+                        df = pd.read_parquet(f"s3://{f}", filesystem=self.s3)
+                        dfs.append(df)
+                    except Exception as e:
+                        print(f"Error loading file {f}: {str(e)}")
+                        continue
+                
+                if not dfs:
+                    raise Exception("No data frames were successfully loaded")
+                
+                return pd.concat(dfs)
+            except Exception as e:
+                print(f"Attempt {attempt + 1} failed: {str(e)}")
+                if attempt < max_retries - 1:
+                    time.sleep(2 ** attempt)  # Exponential backoff
+                else:
+                    raise
+    
     def load_data(self) -> None:
-        """Load all necessary data files from S3."""
-        print("Loading data from S3...")
+        """Load all necessary data files from S3 with better error handling."""
+        print("Starting data loading process...")
         try:
-            base_path = f's3://{settings.S3_BUCKET}'
-            
-            # Load Enrollment data
+            # Load each dataset independently with retry logic
             print("Loading Enrollment data...")
-            enrollment_files = [
-                f"{base_path}/Claims_Enrollment/part-00000-tid-2189087977265260924-ab7a252b-8eba-45ab-9dee-2912fef416fc-1650-1-c000.snappy.parquet"
-            ]
-            self.enrollment_df = pd.concat([
-                pd.read_parquet(f, filesystem=self.s3) 
-                for f in enrollment_files
-            ])
-            
-            # List files in each directory to get exact paths
+            self.enrollment_df = self._load_parquet_with_retry("Claims_Enrollment")
+            print("Enrollment data loaded successfully")
+
             print("Loading Services data...")
-            services_files = self.s3.glob(f"{settings.S3_BUCKET}/Claims_Services/*.parquet")
-            self.services_df = pd.concat([
-                pd.read_parquet(f"s3://{f}", filesystem=self.s3) 
-                for f in services_files
-            ])
-            
+            self.services_df = self._load_parquet_with_retry("Claims_Services")
+            print("Services data loaded successfully")
+
             print("Loading Members data...")
-            members_files = self.s3.glob(f"{settings.S3_BUCKET}/Claims_Member/*.parquet")
-            self.members_df = pd.concat([
-                pd.read_parquet(f"s3://{f}", filesystem=self.s3) 
-                for f in members_files
-            ])
-            
+            self.members_df = self._load_parquet_with_retry("Claims_Member")
+            print("Members data loaded successfully")
+
             print("Loading Providers data...")
-            providers_files = self.s3.glob(f"{settings.S3_BUCKET}/Claims_Provider/*.parquet")
-            self.providers_df = pd.concat([
-                pd.read_parquet(f"s3://{f}", filesystem=self.s3) 
-                for f in providers_files
-            ])
-            
+            self.providers_df = self._load_parquet_with_retry("Claims_Provider")
+            print("Providers data loaded successfully")
+
             # Clean the data after loading
             self.clean_data()
-            print("Data loaded and cleaned successfully.")
+            print("Data cleaning completed")
             
         except Exception as e:
-            print(f"Error loading data from S3: {str(e)}")
+            print(f"Critical error during data loading: {str(e)}")
+            # Initialize with empty DataFrames instead of failing
+            self.services_df = pd.DataFrame()
+            self.members_df = pd.DataFrame()
+            self.enrollment_df = pd.DataFrame()
+            self.providers_df = pd.DataFrame()
             raise
         
     def clean_data(self) -> None:

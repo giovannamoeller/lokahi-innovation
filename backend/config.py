@@ -9,7 +9,6 @@ class Settings(BaseSettings):
     AWS_REGION: str = "us-east-2"
     S3_BUCKET: str = "lohaki-data"
     
-    # Path Settings - removing the ./data/ prefix since that's not in S3
     SERVICES_PATH: str = "Claims_Services"
     MEMBERS_PATH: str = "Claims_Member"
     ENROLLMENT_PATH: str = "Claims_Enrollment"

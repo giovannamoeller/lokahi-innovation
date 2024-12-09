@@ -18,13 +18,16 @@ llm_analyzer = None
 async def lifespan(app: FastAPI):
     # Initialize components only if not already initialized
     global processor, analysis_engine, llm_analyzer
-    print("Initializing components...")
-    processor = HealthDataProcessor()
-    processor.load_data()
-    metrics = processor.generate_health_risk_metrics()
-    analysis_engine = HealthAnalysisEngine(metrics)
-    llm_analyzer = HealthLLMAnalyzer()
-    print("Initialization complete!")
+    try:
+        print("Initializing components...")
+        processor = HealthDataProcessor()
+        processor.load_data()
+        metrics = processor.generate_health_risk_metrics()
+        analysis_engine = HealthAnalysisEngine(metrics)
+        llm_analyzer = HealthLLMAnalyzer()
+        print("Initialization complete!")
+    except Exception as e:
+        print(f"Initialization error: {str(e)}")
     yield
 
 app = FastAPI(lifespan=lifespan)
