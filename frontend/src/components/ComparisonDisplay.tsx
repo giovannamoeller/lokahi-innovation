@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { healthApi } from '../services/api';
+import AIAnalysis from './AIAnalysis';
 
 export default function ComparisonDisplay({
   baseMsa,
@@ -53,19 +54,11 @@ export default function ComparisonDisplay({
     <div className="space-y-6 p-4">
       <div className="bg-white rounded-lg shadow p-6">
         <h2 className="text-2xl font-bold mb-4">Regional Comparison</h2>
+
+        {comparison.analysis.comparative_analysis && (
+          <AIAnalysis analysis={comparison.analysis.comparative_analysis} />
+        )}
         
-        {/* Comparison Analysis */}
-        <div className="prose max-w-none">
-          {comparison.analysis.comparative_analysis.split('\n\n').map((section: string, index: number) => (
-            <div key={index} className="mb-6">
-              {section.split('\n').map((line: string, lineIndex: number) => (
-                <p key={lineIndex} className="mb-2">
-                  {line}
-                </p>
-              ))}
-            </div>
-          ))}
-        </div>
       </div>
     </div>
   );
