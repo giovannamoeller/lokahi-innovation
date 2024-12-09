@@ -12,6 +12,8 @@ export default function ComparePage() {
     <main className="min-h-screen bg-gray-50 p-8">
       <div className="max-w-7xl mx-auto space-y-8">
         <h1 className="text-4xl font-bold">Region Comparison</h1>
+
+        <h2>Please, select two or more regions to continue.</h2>
         
         <RegionSelector
           onSelect={setSelectedMsas}
