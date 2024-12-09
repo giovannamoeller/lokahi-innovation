@@ -20,6 +20,13 @@ export interface ComparisonRequest {
   comparison_msas: string[];
 }
 
+export interface Stats {
+  total_members: number;
+  total_records: number;
+  total_msas: number;
+  total_states: number;
+}
+
 export const healthApi = {
   getMSAs: async (): Promise<MSA> => {
     const response = await api.get('/api/msas');
@@ -38,6 +45,11 @@ export const healthApi = {
 
   checkHealth: async () => {
     const response = await api.get('/api/health');
+    return response.data;
+  },
+
+  getStats: async (): Promise<Stats> => {
+    const response = await api.get('/api/stats');
     return response.data;
   }
 };
