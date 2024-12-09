@@ -1,13 +1,24 @@
-import os
-from dotenv import load_dotenv
+# config.py
+from pydantic_settings import BaseSettings
+from typing import Dict
 
-load_dotenv()
+class Settings(BaseSettings):
+    # AWS Settings
+    AWS_ACCESS_KEY_ID: str
+    AWS_SECRET_ACCESS_KEY: str
+    AWS_REGION: str = "us-east-2"
+    S3_BUCKET: str = "lohaki-data"
+    
+    # Path Settings - removing the ./data/ prefix since that's not in S3
+    SERVICES_PATH: str = "Claims_Services"
+    MEMBERS_PATH: str = "Claims_Member"
+    ENROLLMENT_PATH: str = "Claims_Enrollment"
+    PROVIDERS_PATH: str = "Claims_Provider"
+    
+    # LLM Settings
+    GROQ_API_KEY: str
 
-class Settings:
-  GROQ_API_KEY = os.getenv('GROQ_API_KEY')
-  SERVICES_PATH = os.getenv('SERVICES_PATH')
-  MEMBERS_PATH = os.getenv('MEMBERS_PATH')
-  ENROLLMENT_PATH = os.getenv('ENROLLMENT_PATH')
-  PROVIDERS_PATH = os.getenv('PROVIDERS_PATH')
+    class Config:
+        env_file = ".env"
 
 settings = Settings()

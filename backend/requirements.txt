@@ -9,3 +9,8 @@ python-multipart==0.0.6
 pyarrow==15.0.0
 scipy==1.12.0
 scikit-learn==1.4.0
+
+# S3 dependency
+s3fs==2024.2.0
+aiohttp>=3.8.3,<4.0.0
+async-timeout>=4.0.0,<5.0.0

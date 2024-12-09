@@ -5,6 +5,7 @@ from datetime import datetime
 from dataclasses import dataclass
 from services.ai_service import HealthLLMAnalyzer
 from config import settings
+import s3fs
 
 class HealthDataProcessor:
     def __init__(self):
@@ -13,14 +14,57 @@ class HealthDataProcessor:
         self.enrollment_df = None
         self.providers_df = None
         
+        self.s3 = s3fs.S3FileSystem(
+            key=settings.AWS_ACCESS_KEY_ID,
+            secret=settings.AWS_SECRET_ACCESS_KEY,
+            client_kwargs={'region_name': settings.AWS_REGION}
+        )
+        
     def load_data(self) -> None:
-        """Load all necessary data files."""
-        print("Loading data...")
-        self.services_df = pd.read_parquet(settings.SERVICES_PATH)
-        self.members_df = pd.read_parquet(settings.MEMBERS_PATH)
-        self.enrollment_df = pd.read_parquet(settings.ENROLLMENT_PATH)
-        self.providers_df = pd.read_parquet(settings.PROVIDERS_PATH)
-        print("Data loaded successfully.")
+        """Load all necessary data files from S3."""
+        print("Loading data from S3...")
+        try:
+            base_path = f's3://{settings.S3_BUCKET}'
+            
+            # Load Enrollment data
+            print("Loading Enrollment data...")
+            enrollment_files = [
+                f"{base_path}/Claims_Enrollment/part-00000-tid-2189087977265260924-ab7a252b-8eba-45ab-9dee-2912fef416fc-1650-1-c000.snappy.parquet"
+            ]
+            self.enrollment_df = pd.concat([
+                pd.read_parquet(f, filesystem=self.s3) 
+                for f in enrollment_files
+            ])
+            
+            # List files in each directory to get exact paths
+            print("Loading Services data...")
+            services_files = self.s3.glob(f"{settings.S3_BUCKET}/Claims_Services/*.parquet")
+            self.services_df = pd.concat([
+                pd.read_parquet(f"s3://{f}", filesystem=self.s3) 
+                for f in services_files
+            ])
+            
+            print("Loading Members data...")
+            members_files = self.s3.glob(f"{settings.S3_BUCKET}/Claims_Member/*.parquet")
+            self.members_df = pd.concat([
+                pd.read_parquet(f"s3://{f}", filesystem=self.s3) 
+                for f in members_files
+            ])
+            
+            print("Loading Providers data...")
+            providers_files = self.s3.glob(f"{settings.S3_BUCKET}/Claims_Provider/*.parquet")
+            self.providers_df = pd.concat([
+                pd.read_parquet(f"s3://{f}", filesystem=self.s3) 
+                for f in providers_files
+            ])
+            
+            # Clean the data after loading
+            self.clean_data()
+            print("Data loaded and cleaned successfully.")
+            
+        except Exception as e:
+            print(f"Error loading data from S3: {str(e)}")
+            raise
         
     def clean_data(self) -> None:
         """Clean and prepare the data for analysis."""
