@@ -9,6 +9,7 @@ python-multipart==0.0.6
 pyarrow==15.0.0
 scipy==1.12.0
 scikit-learn==1.4.0
+pydantic-settings==2.1.0
 
 # S3 dependency
 s3fs==2024.2.0
