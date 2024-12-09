@@ -7,10 +7,12 @@ from services.data_processor import HealthDataProcessor, HealthAnalysisEngine
 from services.ai_service import HealthLLMAnalyzer
 from models.schemas import AnalysisRequest, ComparisonRequest
 from datetime import datetime
+import os
 
 processor = None
 analysis_engine = None
 llm_analyzer = None
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -127,3 +129,8 @@ async def get_stats():
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+if __name__ == "__main__":
+    import uvicorn
+    port = int(os.environ.get("PORT", 8000))
+    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=False)
